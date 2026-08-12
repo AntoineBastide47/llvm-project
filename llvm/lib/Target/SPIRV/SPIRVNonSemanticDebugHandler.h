@@ -33,6 +33,7 @@
 namespace llvm {
 
 class GlobalVariable;
+class MachineBasicBlock;
 class SPIRVSubtarget;
 
 /// AsmPrinter handler that emits NonSemantic.Shader.DebugInfo.100 (NSDI)
@@ -92,6 +93,10 @@ class SPIRVNonSemanticDebugHandler : public DebugHandlerBase {
   // DISubprogram nodes that are definitions, collected in beginModule() for
   // DebugFunction emission.
   SmallVector<const DISubprogram *> SubprogramDefinitions;
+
+  // Distinct DILocations from instruction !dbg attachments and debug program
+  // records (#dbg_declare, #dbg_value, #dbg_assign, #dbg_label).
+  SmallVector<const DILocation *> UniqueDebugLocations;
 
   struct GlobalVariableDebugInfo {
     const DIExpression *Expr = nullptr;
@@ -167,6 +172,16 @@ class SPIRVNonSemanticDebugHandler : public DebugHandlerBase {
 
   bool DebugFunctionDefinitionEmitted = false;
 
+  struct DebugLineState {
+    MCRegister SrcReg;
+    unsigned Line;
+    unsigned Col;
+  };
+  const MachineBasicBlock *CurLineMBB = nullptr;
+  std::optional<DebugLineState> CurLineState;
+
+  bool EmitDebugLineForCurrentFn = false;
+
 public:
   explicit SPIRVNonSemanticDebugHandler(AsmPrinter &AP);
 
@@ -231,6 +246,10 @@ private:
                                    SPIRV::ModuleAnalysisInfo &MAI);
 
   void resetPerFunctionDebugState();
+
+  void clearCurLineState();
+
+  void emitDebugLineForInstruction(const MachineInstr *MI);
   void preparePerFunctionDebug(const MachineFunction *MF);
   void tryEmitDebugFunctionDefinition(SPIRV::ModuleAnalysisInfo &MAI);
 
